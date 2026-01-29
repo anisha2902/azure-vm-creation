@@ -1,0 +1,94 @@
+name: Terraform Pipeline
+
+on:
+  workflow_dispatch:       # manual trigger like GitLab web UI
+  schedule:
+    - cron: "0 3 * * *"    # optional: runs daily at 3 AM
+  push:
+    paths:
+      - "vm-folder/**.tf"
+      - ".github/workflows/terraform.yml"
+
+env:
+  TF_IN_AUTOMATION: "true"
+  GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GCP_KEY_PATH }}
+  GCP_KEY_JSON: ${{ secrets.GCP_KEY }}     # GitHub secret (JSON contents)
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: vm-folder
+
+    steps:
+      # ---------------------
+      # Checkout repository
+      # ---------------------
+      - name: Checkout Git Repository
+        uses: actions/checkout@v4
+
+      # ---------------------
+      # Install Terraform
+      # ---------------------
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Print Terraform Version
+        run: terraform --version
+
+      # ---------------------
+      # GCP Service Account Key
+      # (GitHub secret → file → env var)
+      # ---------------------
+      - name: Create GCP credential file
+        run: |
+          echo "$GCP_KEY_JSON" > $HOME/gcp-key.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$HOME/gcp-key.json" >> $GITHUB_ENV
+
+      # ---------------------
+      # Cache .terraform providers
+      # ---------------------
+      - name: Cache Terraform Providers
+        uses: actions/cache@v4
+        with:
+          path: vm-folder/.terraform
+          key: terraform-${{ runner.os }}-${{ hashFiles('vm-folder/**/*.tf') }}
+
+      # ---------------------
+      # Terraform Init
+      # ---------------------
+      - name: Terraform Init
+        run: terraform init -reconfigure
+
+      # ---------------------
+      # Terraform Plan
+      # ---------------------
+      - name: Terraform Plan
+        run: terraform plan -out=tfplan
+
+      # ---------------------
+      # Upload Plan as Artifact
+      # ---------------------
+      - name: Upload Terraform Plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan
+          path: vm-folder
+
+      # ---------------------
+      # Manual Approval (GitHub equivalent of GitLab "when: manual")
+      # ---------------------
+      - name: Wait for Approval
+        if: github.event_name == 'workflow_dispatch'
+        uses: trstringer/manual-approval@v1
+        with:
+          instructions: "Approve to apply Terraform changes."
+
+      # ---------------------
+      # Terraform Apply
+      # ---------------------
+      - name: Terraform Apply
+        if: github.event_name == 'workflow_dispatch'
+        run: terraform apply -auto-approve
