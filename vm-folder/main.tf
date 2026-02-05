@@ -1,28 +1,54 @@
-terraform {
-  backend "gcs" {
-    bucket = "my-bucket-terraform-state"
-    prefix = "envs/dev"
+resource "azurerm_resource_group" "rg" {
+  name     = "${locals.name}-rg"
+  location = "${locals.location}"
+}
+
+resource "azurerm_virtual_network" "vnet" {
+  name                = "${locals.name}-vnet"
+  address_space       = ["10.0.0.0/16"]
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+}
+
+resource "azurerm_subnet" "subnet" {
+  name                 = "${locals.name}-subnet"
+  resource_group_name  = azurerm_resource_group.rg.name
+  virtual_network_name = azurerm_virtual_network.vnet.name
+  address_prefixes     = ["10.0.2.0/24"]
+}
+
+resource "azurerm_network_interface" "nic" {
+  name                = "${locals.name}-nic"
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+
+  ip_configuration {
+    name                          = "internal"
+    subnet_id                     = azurerm_subnet.subnet.id
+    private_ip_address_allocation = "Dynamic"
   }
 }
 
-resource "google_compute_instance" "vm-terraform" {
-  name         = "terraform-instance"
-  machine_type = "e2-medium"
-  zone         = var.zone
+resource "azurerm_windows_virtual_machine" "vm" {
+  name                = "${locals.name}-vm"
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = azurerm_resource_group.rg.location
+  size                = "Standard_F2"
+  admin_username      = "adminuser"
+  admin_password      = "P@$$w0rd1234!"
+  network_interface_ids = [
+    azurerm_network_interface.nic.id,
+  ]
 
-  boot_disk {
-    initialize_params {
-      image = "debian-cloud/debian-11"
-      labels = {
-        my_label = "value"
-      }
-    }
+  os_disk {
+    caching              = "ReadWrite"
+    storage_account_type = "Standard_LRS"
   }
 
-  network_interface {
-    subnetwork = "default"
+  source_image_reference {
+    publisher = "MicrosoftWindowsServer"
+    offer     = "WindowsServer"
+    sku       = "2016-Datacenter"
+    version   = "latest"
   }
-
-  metadata_startup_script = "echo hi > /test.txt"
 }
-
