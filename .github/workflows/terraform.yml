@@ -13,6 +13,11 @@ jobs:
   terraform:
     runs-on: ubuntu-latest
 
+    # OIDC requires id-token: write. contents: read is standard for checkout.
+    permissions:
+      id-token: write
+      contents: read
+
     defaults:
       run:
         working-directory: vm-folder
@@ -24,23 +29,46 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
-      # ✅ Authenticate using the official Google action (no manual echo)
-      - id: auth
-        uses: google-github-actions/auth@v2
+      # 🔐 Authenticate to Azure using OIDC (no client secret needed)
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
         with:
-          credentials_json: ${{ secrets.GCP_KEY }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # Export ARM_* env vars so Terraform AzureRM provider (use_oidc=true) picks them up
+      - name: Set Terraform Azure OIDC env
+        run: |
+          echo "ARM_USE_OIDC=true" >> $GITHUB_ENV
+          echo "ARM_CLIENT_ID=${{ secrets.AZURE_CLIENT_ID }}" >> $GITHUB_ENV
+          echo "ARM_TENANT_ID=${{ secrets.AZURE_TENANT_ID }}" >> $GITHUB_ENV
+          echo "ARM_SUBSCRIPTION_ID=${{ secrets.AZURE_SUBSCRIPTION_ID }}" >> $GITHUB_ENV
 
       - name: Cache Terraform providers
         uses: actions/cache@v4
         with:
-          path: vm-folder/.terraform
+          path: |
+            vm-folder/.terraform
+            ~/.terraform.d/plugin-cache
           key: terraform-${{ runner.os }}-${{ hashFiles('vm-folder/**/*.tf') }}
+          restore-keys: |
+            terraform-${{ runner.os }}-
+
+      - name: Configure TF plugin cache
+        run: |
+          mkdir -p ~/.terraform.d/plugin-cache
+          echo 'plugin_cache_dir = "~/.terraform.d/plugin-cache"' > ~/.terraformrc
 
       - name: Terraform Init
         run: terraform init -reconfigure
+
+      - name: Terraform Validate
+        run: terraform validate
 
       - name: Terraform Plan
         run: terraform plan -out=tfplan
 
       - name: Terraform Apply
-        run: terraform apply -auto-approve
+        # If you want an approval gate, move Apply to a separate job with environment protection rules
+        run: terraform apply -auto-approve tfplan
