@@ -29,11 +29,11 @@ resource "azurerm_network_interface" "nic" {
   }
 }
 
-resource "azurerm_windows_virtual_machine" "vm" {
+resource "azurerm_linux_virtual_machine" "vm" {
   name                = "${var.name}-vm"
   resource_group_name = azurerm_resource_group.rg.name
   location            = azurerm_resource_group.rg.location
-  size                = "Standard_B1s"
+  size                = "Standard_DC1s_v3"
   admin_username      = "adminuser"
   admin_password      = "P@$$w0rd1234!"
   network_interface_ids = [
@@ -42,13 +42,6 @@ resource "azurerm_windows_virtual_machine" "vm" {
 
   os_disk {
     caching              = "ReadWrite"
-    storage_account_type = "Standard_DC1s_v3"
-  }
-
-  source_image_reference {
-    publisher = "MicrosoftWindowsServer"
-    offer     = "WindowsServer"
-    sku       = "2016-Datacenter"
-    version   = "latest"
+    storage_account_type = "Standard_LRS"
   }
 }
