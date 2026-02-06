@@ -1,6 +1,9 @@
-variable "zone" {
-  description = "The GCP zone to deploy resources in"
+variable "name" {
   type        = string
-  default     = "us-east1-b"
+  default     = "terraform" 
 }
 
+variable "location" {
+  type        = string
+  default     = "West Europe"
+}
