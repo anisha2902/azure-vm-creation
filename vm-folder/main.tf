@@ -33,7 +33,7 @@ resource "azurerm_windows_virtual_machine" "vm" {
   name                = "${var.name}-vm"
   resource_group_name = azurerm_resource_group.rg.name
   location            = azurerm_resource_group.rg.location
-  size                = "Standard_F2"
+  size                = "Standard_B1s"
   admin_username      = "adminuser"
   admin_password      = "P@$$w0rd1234!"
   network_interface_ids = [
