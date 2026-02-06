@@ -1,6 +1,6 @@
 resource "azurerm_resource_group" "rg" {
   name     = "${locals.name}-rg"
-  location = "${locals.location}"
+  location = locals.location
 }
 
 resource "azurerm_virtual_network" "vnet" {
