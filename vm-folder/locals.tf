@@ -1,4 +1,4 @@
 locals {
-    name = "terraform"
-    location = "West Europe"
+  name     = "terraform"
+  location = "West Europe"
 }
