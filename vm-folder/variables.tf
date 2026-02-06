@@ -1,6 +1,6 @@
 variable "name" {
-  type        = string
-  default     = "terraform" 
+  type    = string
+  default = "terraform" 
 }
 
 variable "location" {
