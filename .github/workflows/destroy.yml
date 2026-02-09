@@ -1,33 +1,58 @@
-name: Terraform Destroy
+name: terraform-destroy
+
+permissions:
+  id-token: write
+  contents: read
 
 on:
   workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type DESTROY to confirm'
+        required: true
+        default: 'DESTROY'
 
 env:
-  TF_IN_AUTOMATION: "true"
-  GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GCP_KEY_PATH }}
-  GCP_KEY_JSON: ${{ secrets.GCP_KEY }}
+  TF_VERSION: "1.6.6"
 
+defaults:
+  run:
+    shell: bash
+    working-directory: vm-folder   
 jobs:
   destroy:
     runs-on: ubuntu-latest
+    if: github.event.inputs.confirm == 'DESTROY'
 
-    defaults:
-      run:
-        working-directory: vm-folder
+    env:
+      TF_VAR_ssh_public_key: ${{ secrets.TF_VAR_SSH_PUBLIC_KEY }}
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: hashicorp/setup-terraform@v3
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
 
-      - name: Create GCP credential file
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id:        ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id:        ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id:  ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Export ARM_* for OIDC
         run: |
-          echo "$GCP_KEY_JSON" > $HOME/gcp-key.json
-          echo "GOOGLE_APPLICATION_CREDENTIALS=$HOME/gcp-key.json" >> $GITHUB_ENV
+          echo "ARM_USE_OIDC=true" >> "$GITHUB_ENV"
+          echo "ARM_SUBSCRIPTION_ID=${{ secrets.AZURE_SUBSCRIPTION_ID }}" >> "$GITHUB_ENV"
+          echo "ARM_TENANT_ID=${{ secrets.AZURE_TENANT_ID }}" >> "$GITHUB_ENV"
+          echo "ARM_CLIENT_ID=${{ secrets.AZURE_CLIENT_ID }}" >> "$GITHUB_ENV"
 
       - name: Terraform Init
-        run: terraform init -reconfigure
+        run: terraform init -upgrade
 
       - name: Terraform Destroy
         run: terraform destroy -auto-approve
